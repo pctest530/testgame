@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>像素動畫製作工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f8ff;
+            padding: 20px;
+        }
+        #canvas {
+            border: 1px solid #333;
+            display: block;
+            margin: 0 auto;
+        }
+        .tools {
+            margin-top: 20px;
+        }
+        .tools button, .tools input[type="range"], .tools input[type="color"] {
+            padding: 10px;
+            font-size: 16px;
+            margin: 5px;
+        }
+        .brush-size {
+            margin-top: 10px;
+        }
+        #frameDisplay {
+            margin-top: 20px;
+        }
+        .brush-shape {
+            margin-top: 20px;
+        }
+        .layer-controls {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>像素動畫製作工具</h1>
+
+    <!-- 畫布 -->
+    <canvas id="canvas" width="160" height="160"></canvas>
+
+    <!-- 顏色選擇器、畫筆大小選擇、橡皮擦 -->
+    <div class="tools">
+        <input type="color" id="colorPicker" value="#000000">
+        <label for="brushSize">畫筆大小:</label>
+        <input type="range" id="brushSize" class="brush-size" min="1" max="20" value="10">
+        <div class="brush-shape">
+            <button onclick="setBrushShape('circle')">圓形畫筆</button>
+            <button onclick="setBrushShape('square')">方形畫筆</button>
+        </div>
+        <button onclick="activateEraser()">啟用橡皮擦</button>
+        <button onclick="clearCanvas()">清除畫布</button>
+        <button onclick="createFrame()">創建新幀</button>
+        <button onclick="playAnimation()">播放動畫</button>
+        <button onclick="stopAnimation()">停止動畫</button>
+        <button onclick="toggleOnionSkin()">切換洋蔥皮</button>
+    </div>
+
+    <!-- 顯示幀數 -->
+    <div id="frameDisplay">
+        <p>當前創建的幀數：<span id="frameCount">0</span></p>
+    </div>
+
+    <!-- 圖層控制 -->
+    <div class="layer-controls">
+        <button onclick="addLayer()">新增圖層</button>
+        <button onclick="removeLayer()">刪除圖層</button>
+        <button onclick="toggleLayerVisibility()">切換圖層可見性</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const colorPicker = document.getElementById('colorPicker');
+        const brushSizeInput = document.getElementById('brushSize');
+        const frameCountDisplay = document.getElementById('frameCount');
+        let currentColor = colorPicker.value;
+        let currentBrushSize = brushSizeInput.value;
+        let frames = [];
+        let currentFrameIndex = 0;
+        let animationInterval;
+        let eraserActive = false;
+        let brushShape = 'circle';  // 預設圓形畫筆
+        let isDrawing = false;  // 用來判斷畫布上是否在繪圖
+        let onionSkinEnabled = false;  // 是否啟用洋蔥皮
+        let layers = [{ visible: true, content: [] }];  // 圖層數組，初始有一層
+
+        // 畫布初始化
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // 監聽畫布的繪製事件
+        canvas.addEventListener('mousedown', function(e) {
+            isDrawing = true;
+            draw(e); // 開始繪製
+        });
+
+        canvas.addEventListener('mousemove', function(e) {
+            if (isDrawing) {
+                draw(e);
+            }
+        });
+
+        canvas.addEventListener('mouseup', function() {
+            isDrawing = false; // 結束繪製
+        });
+
+        canvas.addEventListener('mouseout', function() {
+            isDrawing = false; // 滑鼠離開畫布也停止繪製
+        });
+
+        // 更新顏色
+        colorPicker.addEventListener('input', function() {
+            currentColor = colorPicker.value;
+        });
+
+        // 更新畫筆大小
+        brushSizeInput.addEventListener('input', function() {
+            currentBrushSize = brushSizeInput.value;
+        });
+
+        // 設定畫筆形狀
+        function setBrushShape(shape) {
+            brushShape = shape;
+        }
+
+        // 啟用橡皮擦
+        function activateEraser() {
+            eraserActive = !eraserActive;
+            alert(eraserActive ? "橡皮擦已啟用" : "橡皮擦已停用");
+        }
+
+        // 繪圖函數
+        function draw(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            ctx.fillStyle = eraserActive ? "#ffffff" : currentColor;
+            ctx.beginPath();
+
+            if (brushShape === 'circle') {
+                // 畫圓形
+                ctx.arc(x, y, currentBrushSize / 2, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (brushShape === 'square') {
+                // 畫方形
+                ctx.fillRect(x - currentBrushSize / 2, y - currentBrushSize / 2, currentBrushSize, currentBrushSize);
+            }
+
+            ctx.closePath();
+        }
+
+        // 創建新幀
+        function createFrame() {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            frames.push(imageData);
+            updateFrameCount();
+            alert("新幀創建成功！");
+        }
+
+        // 更新幀數顯示
+        function updateFrameCount() {
+            frameCountDisplay.textContent = frames.length;
+        }
+
+        // 播放動畫
+        function playAnimation() {
+            if (frames.length === 0) {
+                alert("請先創建一些幀!");
+                return;
+            }
+
+            currentFrameIndex = 0;
+            animationInterval = setInterval(function() {
+                if (onionSkinEnabled && currentFrameIndex > 0) {
+                    // 顯示前一幀作為洋蔥皮
+                    ctx.putImageData(frames[currentFrameIndex - 1], 0, 0);
+                }
+                ctx.putImageData(frames[currentFrameIndex], 0, 0);
+                currentFrameIndex++;
+                if (currentFrameIndex >= frames.length) {
+                    currentFrameIndex = 0; // 循環播放
+                }
+            }, 500); // 每幀播放 500 毫秒
+        }
+
+        // 停止播放動畫
+        function stopAnimation() {
+            clearInterval(animationInterval);
+        }
+
+        // 切換洋蔥皮功能
+        function toggleOnionSkin() {
+            onionSkinEnabled = !onionSkinEnabled;
+            alert(onionSkinEnabled ? "洋蔥皮已啟用" : "洋蔥皮已停用");
+        }
+
+        // 新增圖層
+        function addLayer() {
+            layers.push({ visible: true, content: [] });
+            alert("新增圖層成功！");
+        }
+
+        // 刪除圖層
+        function removeLayer() {
+            if (layers.length > 1) {
+                layers.pop();
+                alert("圖層已刪除！");
+            } else {
+                alert("至少要有一個圖層！");
+            }
+        }
+
+        // 切換圖層可見性
+        function toggleLayerVisibility() {
+            if (layers.length > 1) {
+                layers[layers.length - 1].visible = !layers[layers.length - 1].visible;
+                alert(`當前圖層可見性: ${layers[layers.length - 1].visible ? "可見" : "隱藏"}`);
+            } else {
+                alert("無法隱藏唯一圖層！");
+            }
+        }
+    </script>
+
+</body>
+</html>

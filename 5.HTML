@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>像素冒險遊戲</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #1e1e2f;
+            color: white;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background-color: #000;
+        }
+
+        #score, #kills, #skills {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 16px;
+            z-index: 10;
+        }
+
+        #kills {
+            top: 40px;
+        }
+
+        #skills {
+            top: 70px;
+        }
+
+        .skills {
+            position: absolute;
+            bottom: 20px;
+            left: 10px;
+            display: none;
+            user-select: none;
+        }
+
+        .skills button {
+            margin-right: 10px;
+            padding: 10px;
+            font-size: 14px;
+            background-color: #ffdd55;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .skills button:hover {
+            background-color: #ffc107;
+        }
+
+        #popupContainer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ffdd55;
+            font-size: 20px;
+            font-weight: bold;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        .skill-popup {
+            animation: fadeOut 2s forwards;
+        }
+
+        @keyframes fadeOut {
+            0% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+        }
+
+    </style>
+</head>
+<body>
+    <div id="score">分數：0</div>
+    <div id="kills">擊殺數：0</div>
+    <div id="skills">技能點：0</div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div class="skills">
+        <button id="damageSkill">提升傷害</button>
+        <button id="rangeSkill">提升射程</button>
+        <button id="speedSkill">提升速度</button>
+    </div>
+    <div id="popupContainer"></div>
+    <script>
+        // 設定畫布與遊戲邏輯
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // 加載主角圖片
+        const heroImage = new Image();
+        heroImage.src = 'hero.png'; // 請確保圖片文件與HTML文件位於同一資料夾
+
+        // 主角設定
+        let player = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            size: 40,
+            speed: 3,
+            damage: 20,
+            range: 20,
+            image: heroImage, // 用圖片來顯示主角
+        };
+
+        let enemies = [];
+        let keys = {};
+        let score = 0;
+        let kills = 0;
+        let skillPoints = 0;
+        let enemySpawnRate = 1;
+
+        const scoreDisplay = document.getElementById("score");
+        const killsDisplay = document.getElementById("kills");
+        const skillsDisplay = document.getElementById("skills");
+        const skillsDiv = document.querySelector(".skills");
+        const popupContainer = document.getElementById("popupContainer");
+
+        // 顯示技能點數彈窗
+        function showSkillPopup(skillName) {
+            const popup = document.createElement("div");
+            popup.className = "skill-popup";
+            popup.textContent = `解鎖技能：${skillName}`;
+            popupContainer.appendChild(popup);
+
+            setTimeout(() => {
+                popupContainer.removeChild(popup);
+            }, 2000);
+        }
+
+        // 移動主角
+        function movePlayer() {
+            if (keys["w"]) player.y -= player.speed;
+            if (keys["s"]) player.y += player.speed;
+            if (keys["a"]) player.x -= player.speed;
+            if (keys["d"]) player.x += player.speed;
+
+            // 保證主角不會跑出畫布邊界
+            player.x = Math.max(player.size, Math.min(canvas.width - player.size, player.x));
+            player.y = Math.max(player.size, Math.min(canvas.height - player.size, player.y));
+        }
+
+        // 生成敵人
+        function spawnEnemy() {
+            for (let i = 0; i < enemySpawnRate; i++) {
+                const size = 15 + Math.random() * 10;
+                const enemy = {
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size,
+                    color: "red",
+                    speed: 1 + Math.random(),
+                };
+                enemies.push(enemy);
+            }
+        }
+
+        // 移動敵人
+        function moveEnemies() {
+            enemies.forEach((enemy) => {
+                const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+                enemy.x += Math.cos(angle) * enemy.speed;
+                enemy.y += Math.sin(angle) * enemy.speed;
+            });
+        }
+
+        // 檢查碰撞
+        function checkCollisions() {
+            enemies = enemies.filter((enemy) => {
+                const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+                if (dist < player.size + enemy.size) {
+                    kills++;
+                    killsDisplay.textContent = `擊殺數：${kills}`;
+                    score += 10;
+                    scoreDisplay.textContent = `分數：${score}`;
+
+                    // 每20擊殺獲得技能點數
+                    if (kills % 20 === 0) {
+                        skillPoints++;
+                        skillsDisplay.textContent = `技能點：${skillPoints}`;
+                        skillsDiv.style.display = "block";
+                        showSkillPopup("技能點");
+
+                        if (kills === 20 || kills === 40 || kills === 60) {
+                            enemySpawnRate++;
+                            showSkillPopup(`新技能解鎖！(當前難度：${enemySpawnRate})`);
+                        }
+                    }
+                    return false;
+                }
+                return true;
+            });
+        }
+
+        // 繪製遊戲畫面
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 等待圖片加載後再繪製主角
+            if (heroImage.complete) {
+                ctx.drawImage(player.image, player.x - player.size / 2, player.y - player.size / 2, player.size, player.size);
+            }
+
+            // 繪製攻擊範圍
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.size + player.range, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // 繪製敵人
+            enemies.forEach((enemy) => {
+                ctx.fillStyle = enemy.color;
+                ctx.beginPath();
+                ctx.arc(enemy.x, enemy.y, enemy.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        // 遊戲主循環
+        function gameLoop() {
+            movePlayer();
+            moveEnemies();
+            checkCollisions();
+            drawGame();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 處理技能按鈕點擊事件
+        function handleSkillClick(skillType) {
+            if (skillPoints > 0) {
+                if (skillType === 'damage') {
+                    player.damage += 10;
+                    skillPoints--;
+                    skillsDisplay.textContent = `技能點：${skillPoints}`;
+                    showSkillPopup("提升傷害");
+                } else if (skillType === 'range') {
+                    player.range += 10;
+                    skillPoints--;
+                    skillsDisplay.textContent = `技能點：${skillPoints}`;
+                    showSkillPopup("提升射程");
+                } else if (skillType === 'speed') {
+                    player.speed += 1;
+                    skillPoints--;
+                    skillsDisplay.textContent = `技能點：${skillPoints}`;
+                    showSkillPopup("提升速度");
+                }
+            }
+        }
+
+        // 初始化技能按鈕事件
+        document.getElementById("damageSkill").addEventListener("click", () => handleSkillClick("damage"));
+        document.getElementById("rangeSkill").addEventListener("click", () => handleSkillClick("range"));
+        document.getElementById("speedSkill").addEventListener("click", () => handleSkillClick("speed"));
+
+        function startGame() {
+            setInterval(spawnEnemy, 1000);
+            gameLoop();
+        }
+
+        // 處理鍵盤按鍵
+        document.addEventListener("keydown", (e) => (keys[e.key] = true));
+        document.addEventListener("keyup", (e) => (keys[e.key] = false));
+
+        startGame(); // 遊戲開始
+    </script>
+</body>
+</html>
